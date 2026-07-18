@@ -47,6 +47,7 @@ from bfcl_eval.model_handler.local_inference.granite import (
 from bfcl_eval.model_handler.local_inference.granite_3 import Granite3FCHandler
 from bfcl_eval.model_handler.local_inference.granite_4 import Granite4FCHandler
 from bfcl_eval.model_handler.local_inference.hammer import HammerHandler
+from bfcl_eval.model_handler.local_inference.lfm2 import LFM2Handler
 from bfcl_eval.model_handler.local_inference.llama import LlamaHandler
 from bfcl_eval.model_handler.local_inference.llama_3_1 import LlamaHandler_3_1
 from bfcl_eval.model_handler.local_inference.lumma import LummaHandler
@@ -1248,6 +1249,30 @@ local_inference_model_map = {
         input_price=None,
         output_price=None,
         is_fc_model=False,
+        underscore_to_dot=False,
+    ),
+    "openbmb/MiniCPM4-0.5B": ModelConfig(
+        model_name="openbmb/MiniCPM4-0.5B",
+        display_name="MiniCPM4-0.5B (Prompt)",
+        url="https://huggingface.co/openbmb/MiniCPM4-0.5B",
+        org="openbmb",
+        license="apache-2.0",
+        model_handler=QuickTestingOSSHandler,
+        input_price=None,
+        output_price=None,
+        is_fc_model=False,
+        underscore_to_dot=False,
+    ),
+    "LiquidAI/LFM2-700M": ModelConfig(
+        model_name="LiquidAI/LFM2-700M",
+        display_name="LFM2-700M (FC)",
+        url="https://huggingface.co/LiquidAI/LFM2-700M",
+        org="Liquid AI",
+        license="lfm1.0",
+        model_handler=LFM2Handler,
+        input_price=None,
+        output_price=None,
+        is_fc_model=True,
         underscore_to_dot=False,
     ),
     "deepseek-ai/DeepSeek-R1": ModelConfig(
