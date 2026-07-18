@@ -14,6 +14,8 @@
 
 SUPPORTED_MODELS = [
     "FrontiersMind/Lumma-0.6B-Tool",
+    "Qwen/Qwen2.5-0.5B-Instruct-FC",
+    "Qwen/Qwen2.5-0.5B-Instruct",
     "gorilla-openfunctions-v2",
     "DeepSeek-V3.2-Exp",
     "DeepSeek-V3.2-Exp-FC",
