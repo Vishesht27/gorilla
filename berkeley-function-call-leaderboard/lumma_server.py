@@ -1,17 +1,24 @@
-"""Simple OpenAI-compatible completions server for custom-arch HF models.
+"""Simple OpenAI-compatible completions server for HF models (any architecture).
 
 BFCL's OSS pipeline talks to a local model through an OpenAI-compatible
 `/v1/completions` endpoint. Because Lumma uses a custom `nandi` architecture that
 vLLM/sglang cannot load, we serve it with plain `transformers` + trust_remote_code
-here, then run BFCL with `--skip-server-setup`.
+here, then run BFCL with `--skip-server-setup`. The server is model-agnostic (it
+just runs generate on whatever prompt BFCL sends), so it works for standard models
+too (e.g. Qwen) — run a second instance on a different port.
 
 Requests are processed one at a time (no batching / no concurrency) for maximum
 reliability with the custom architecture. Run BFCL with `--num-threads 1`.
 
 Usage:
+    # Lumma on port 1053
     python lumma_server.py --model-path FrontiersMind/Lumma-0.6B-Tool --port 1053
-
     bfcl generate --model FrontiersMind/Lumma-0.6B-Tool \
+        --test-category multi_turn --skip-server-setup --num-threads 1
+
+    # A second model (e.g. Qwen) on port 1054, pointed at via LOCAL_SERVER_PORT
+    python lumma_server.py --model-path Qwen/Qwen2.5-0.5B-Instruct --port 1054
+    LOCAL_SERVER_PORT=1054 bfcl generate --model Qwen/Qwen2.5-0.5B-Instruct-FC \
         --test-category multi_turn --skip-server-setup --num-threads 1
 """
 
@@ -83,7 +90,9 @@ def completions(req: CompletionRequest):
 
             gen_ids = out[0, prompt_tokens:]
             completion_tokens = int(gen_ids.shape[0])
-            skip_special = bool(req.skip_special_tokens) if req.skip_special_tokens is not None else False
+            # Default to stripping special tokens so any model's output is clean
+            # (e.g. Qwen's trailing <|im_end|>). Equivalent for Lumma.
+            skip_special = bool(req.skip_special_tokens) if req.skip_special_tokens is not None else True
             text = TOKENIZER.decode(gen_ids, skip_special_tokens=skip_special)
             text = text.split("<|endoftext|>")[0]
     except Exception as exc:
