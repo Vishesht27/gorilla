@@ -38,6 +38,9 @@ MODEL_ID = None
 MAX_BATCH_SIZE = 16
 BATCH_WAIT_S = 0.01  # how long to wait accumulating a batch
 MAX_NEW_TOKENS_CAP = 4096
+# Prompts longer than this (model context minus a small margin) can't be run and
+# would raise a position-embedding error, so we skip them with an empty response.
+MAX_INPUT_TOKENS = 100000
 
 _REQUEST_QUEUE: "queue.Queue[_Job]" = queue.Queue()
 
@@ -64,14 +67,65 @@ class CompletionRequest(BaseModel):
     skip_special_tokens: bool | None = None
 
 
+def _decode_generated(row) -> tuple[str, int]:
+    text = TOKENIZER.decode(row, skip_special_tokens=False).split("<|endoftext|>")[0]
+    row_list = row.tolist()
+    eos_id = TOKENIZER.eos_token_id
+    completion_tokens = row_list.index(eos_id) if eos_id in row_list else len(row_list)
+    return text, completion_tokens
+
+
+def _generate_single(job: _Job) -> None:
+    """Proven single-request path; used as fallback and for over-length isolation."""
+    try:
+        enc = TOKENIZER(job.prompt, return_tensors="pt").to(MODEL.device)
+        input_len = int(enc["input_ids"].shape[1])
+        if input_len > MAX_INPUT_TOKENS:
+            job.result = {"text": "", "prompt_tokens": input_len, "completion_tokens": 0}
+            return
+        do_sample = job.temperature is not None and job.temperature > 0.0
+        gen_kwargs = dict(
+            max_new_tokens=min(MAX_NEW_TOKENS_CAP, job.max_tokens),
+            do_sample=do_sample,
+            eos_token_id=TOKENIZER.eos_token_id,
+            pad_token_id=TOKENIZER.pad_token_id,
+        )
+        if do_sample:
+            gen_kwargs["temperature"] = job.temperature
+        with torch.no_grad():
+            out = MODEL.generate(**enc, **gen_kwargs)
+        text, completion_tokens = _decode_generated(out[0, input_len:])
+        job.result = {
+            "text": text,
+            "prompt_tokens": input_len,
+            "completion_tokens": completion_tokens,
+        }
+    except Exception as exc:
+        # Never crash the client: return an empty (scored-wrong) response instead.
+        print(f"[warn] single generation failed: {exc}")
+        job.result = {"text": "", "prompt_tokens": 0, "completion_tokens": 0}
+
+
 def _run_batch(batch: list[_Job]) -> None:
-    prompts = [j.prompt for j in batch]
+    # Isolate over-length prompts so one giant prompt can't poison the batch.
+    runnable: list[_Job] = []
+    for job in batch:
+        n = len(TOKENIZER(job.prompt).input_ids)
+        if n > MAX_INPUT_TOKENS:
+            job.result = {"text": "", "prompt_tokens": n, "completion_tokens": 0}
+            job.event.set()
+        else:
+            runnable.append(job)
+    if not runnable:
+        return
+
+    prompts = [j.prompt for j in runnable]
     enc = TOKENIZER(prompts, return_tensors="pt", padding=True).to(MODEL.device)
     input_len = enc["input_ids"].shape[1]
 
-    temperature = batch[0].temperature
+    temperature = runnable[0].temperature
     do_sample = temperature is not None and temperature > 0.0
-    max_new = min(MAX_NEW_TOKENS_CAP, max(j.max_tokens for j in batch))
+    max_new = min(MAX_NEW_TOKENS_CAP, max(j.max_tokens for j in runnable))
 
     gen_kwargs = dict(
         max_new_tokens=max_new,
@@ -86,16 +140,11 @@ def _run_batch(batch: list[_Job]) -> None:
         out = MODEL.generate(**enc, **gen_kwargs)
 
     gen = out[:, input_len:]
-    eos_id = TOKENIZER.eos_token_id
-    for i, job in enumerate(batch):
-        row = gen[i]
-        text = TOKENIZER.decode(row, skip_special_tokens=False).split("<|endoftext|>")[0]
-        row_list = row.tolist()
-        completion_tokens = row_list.index(eos_id) if eos_id in row_list else len(row_list)
-        prompt_tokens = int(enc["attention_mask"][i].sum())
+    for i, job in enumerate(runnable):
+        text, completion_tokens = _decode_generated(gen[i])
         job.result = {
             "text": text,
-            "prompt_tokens": prompt_tokens,
+            "prompt_tokens": int(enc["attention_mask"][i].sum()),
             "completion_tokens": completion_tokens,
         }
         job.event.set()
@@ -116,10 +165,14 @@ def _worker_loop() -> None:
                 break
         try:
             _run_batch(batch)
-        except Exception as exc:  # surface the error to every waiter in the batch
+        except Exception as exc:
+            # A batch-level failure (e.g. OOM) falls back to per-request generation
+            # so one bad request never takes down the whole batch.
+            print(f"[warn] batch failed ({exc}); retrying items individually")
             for job in batch:
-                job.result = {"error": str(exc)}
-                job.event.set()
+                if not job.event.is_set():
+                    _generate_single(job)
+                    job.event.set()
 
 
 @app.get("/v1/models")
@@ -133,9 +186,7 @@ def completions(req: CompletionRequest):
     _REQUEST_QUEUE.put(job)
     job.event.wait()
 
-    result = job.result or {}
-    if "error" in result:
-        return {"error": {"message": result["error"], "type": "server_error"}}
+    result = job.result or {"text": "", "prompt_tokens": 0, "completion_tokens": 0}
 
     return {
         "id": f"cmpl-{uuid.uuid4().hex}",
@@ -163,7 +214,7 @@ def main():
     parser.add_argument("--batch-wait-ms", type=int, default=10)
     args = parser.parse_args()
 
-    global MODEL, TOKENIZER, MODEL_ID, MAX_BATCH_SIZE, BATCH_WAIT_S
+    global MODEL, TOKENIZER, MODEL_ID, MAX_BATCH_SIZE, BATCH_WAIT_S, MAX_INPUT_TOKENS
     MODEL_ID = args.model_path
     MAX_BATCH_SIZE = args.max_batch_size
     BATCH_WAIT_S = args.batch_wait_ms / 1000.0
@@ -183,6 +234,12 @@ def main():
         device_map="auto",
     )
     MODEL.eval()
+
+    # Skip prompts that exceed the model's context (reserve room for generation).
+    ctx = getattr(MODEL.config, "max_position_embeddings", None)
+    if ctx:
+        MAX_INPUT_TOKENS = ctx - 16
+        print(f"Model context length: {ctx} (skipping prompts > {MAX_INPUT_TOKENS} tokens)")
 
     worker = threading.Thread(target=_worker_loop, daemon=True)
     worker.start()
