@@ -49,6 +49,7 @@ from bfcl_eval.model_handler.local_inference.granite_4 import Granite4FCHandler
 from bfcl_eval.model_handler.local_inference.hammer import HammerHandler
 from bfcl_eval.model_handler.local_inference.llama import LlamaHandler
 from bfcl_eval.model_handler.local_inference.llama_3_1 import LlamaHandler_3_1
+from bfcl_eval.model_handler.local_inference.lumma import LummaHandler
 from bfcl_eval.model_handler.local_inference.minicpm import MiniCPMHandler
 from bfcl_eval.model_handler.local_inference.minicpm_fc import MiniCPMFCHandler
 from bfcl_eval.model_handler.local_inference.mistral_fc import MistralFCHandler
@@ -1213,6 +1214,18 @@ api_inference_model_map = {
 
 # Inference through local hosting
 local_inference_model_map = {
+    "FrontiersMind/Lumma-0.6B-Tool": ModelConfig(
+        model_name="FrontiersMind/Lumma-0.6B-Tool",
+        display_name="Lumma-0.6B-Tool (Prompt)",
+        url="https://huggingface.co/FrontiersMind/Lumma-0.6B-Tool",
+        org="FrontiersMind",
+        license="apache-2.0",
+        model_handler=LummaHandler,
+        input_price=None,
+        output_price=None,
+        is_fc_model=False,
+        underscore_to_dot=False,
+    ),
     "deepseek-ai/DeepSeek-R1": ModelConfig(
         model_name="deepseek-ai/DeepSeek-R1",
         display_name="DeepSeek-R1 (Prompt) (Local)",

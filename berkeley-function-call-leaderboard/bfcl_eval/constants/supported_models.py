@@ -13,6 +13,7 @@
 # -----------------------------------------------------------------------------
 
 SUPPORTED_MODELS = [
+    "FrontiersMind/Lumma-0.6B-Tool",
     "gorilla-openfunctions-v2",
     "DeepSeek-V3.2-Exp",
     "DeepSeek-V3.2-Exp-FC",
