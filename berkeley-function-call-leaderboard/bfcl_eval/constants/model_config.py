@@ -1275,6 +1275,18 @@ local_inference_model_map = {
         is_fc_model=True,
         underscore_to_dot=False,
     ),
+    "LiquidAI/LFM2-1.2B": ModelConfig(
+        model_name="LiquidAI/LFM2-1.2B",
+        display_name="LFM2-1.2B (FC)",
+        url="https://huggingface.co/LiquidAI/LFM2-1.2B",
+        org="Liquid AI",
+        license="lfm1.0",
+        model_handler=LFM2Handler,
+        input_price=None,
+        output_price=None,
+        is_fc_model=True,
+        underscore_to_dot=False,
+    ),
     "deepseek-ai/DeepSeek-R1": ModelConfig(
         model_name="deepseek-ai/DeepSeek-R1",
         display_name="DeepSeek-R1 (Prompt) (Local)",

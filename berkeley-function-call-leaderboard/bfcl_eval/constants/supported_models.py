@@ -18,6 +18,7 @@ SUPPORTED_MODELS = [
     "Qwen/Qwen2.5-0.5B-Instruct",
     "openbmb/MiniCPM4-0.5B",
     "LiquidAI/LFM2-700M",
+    "LiquidAI/LFM2-1.2B",
     "gorilla-openfunctions-v2",
     "DeepSeek-V3.2-Exp",
     "DeepSeek-V3.2-Exp-FC",
