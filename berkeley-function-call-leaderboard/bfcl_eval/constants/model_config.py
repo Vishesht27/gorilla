@@ -61,6 +61,10 @@ from bfcl_eval.model_handler.local_inference.quick_testing_oss import (
 )
 from bfcl_eval.model_handler.local_inference.qwen import QwenHandler
 from bfcl_eval.model_handler.local_inference.qwen_fc import QwenFCHandler
+from bfcl_eval.model_handler.local_inference.qwen_nothink import (
+    QwenFCNoThinkHandler,
+    QwenNoThinkHandler,
+)
 from bfcl_eval.model_handler.local_inference.pelican_vl_fc import PelicanVLFCHandler
 from bfcl_eval.model_handler.local_inference.nanbeige_fc import NanbeigeFCHandler
 from bfcl_eval.model_handler.local_inference.salesforce_llama import (
@@ -1705,6 +1709,30 @@ local_inference_model_map = {
         input_price=None,
         output_price=None,
         is_fc_model=False,
+        underscore_to_dot=False,
+    ),
+    "Qwen/Qwen3-0.6B-NoThink": ModelConfig(
+        model_name="Qwen/Qwen3-0.6B",
+        display_name="Qwen3-0.6B (Prompt, No Think)",
+        url="https://huggingface.co/Qwen/Qwen3-0.6B",
+        org="Qwen",
+        license="apache-2.0",
+        model_handler=QwenNoThinkHandler,
+        input_price=None,
+        output_price=None,
+        is_fc_model=False,
+        underscore_to_dot=False,
+    ),
+    "Qwen/Qwen3-0.6B-FC-NoThink": ModelConfig(
+        model_name="Qwen/Qwen3-0.6B",
+        display_name="Qwen3-0.6B (FC, No Think)",
+        url="https://huggingface.co/Qwen/Qwen3-0.6B",
+        org="Qwen",
+        license="apache-2.0",
+        model_handler=QwenFCNoThinkHandler,
+        input_price=None,
+        output_price=None,
+        is_fc_model=True,
         underscore_to_dot=False,
     ),
     "Qwen/Qwen3-1.7B-FC": ModelConfig(

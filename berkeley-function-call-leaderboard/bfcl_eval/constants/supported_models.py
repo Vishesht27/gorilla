@@ -145,6 +145,8 @@ SUPPORTED_MODELS = [
     "THUDM/glm-4-9b-chat",
     "Qwen/Qwen3-0.6B-FC",
     "Qwen/Qwen3-0.6B",
+    "Qwen/Qwen3-0.6B-NoThink",
+    "Qwen/Qwen3-0.6B-FC-NoThink",
     "Qwen/Qwen3-1.7B-FC",
     "Qwen/Qwen3-1.7B",
     "Qwen/Qwen3-4B-Instruct-2507-FC",
