@@ -35,6 +35,23 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+
+def _patch_transformers_compat() -> None:
+    """Shim APIs removed in transformers 5.x still imported by Hub remote code.
+
+    MiniCPM4 and other trust_remote_code models import is_torch_fx_available,
+    which was dropped because torch.fx is always available on supported PyTorch.
+    """
+    import transformers.utils.import_utils as import_utils
+
+    if not hasattr(import_utils, "is_torch_fx_available"):
+
+        def is_torch_fx_available() -> bool:
+            return True
+
+        import_utils.is_torch_fx_available = is_torch_fx_available
+
+
 MODEL = None
 TOKENIZER = None
 MODEL_ID = None
@@ -117,11 +134,18 @@ def completions(req: CompletionRequest):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-path", default="FrontiersMind/Lumma-0.6B-Tool")
+    parser.add_argument(
+        "--model-path",
+        "--model",
+        dest="model_path",
+        default="FrontiersMind/Lumma-0.6B-Tool",
+    )
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=1053)
     parser.add_argument("--dtype", default="bfloat16")
     args = parser.parse_args()
+
+    _patch_transformers_compat()
 
     global MODEL, TOKENIZER, MODEL_ID, MAX_INPUT_TOKENS
     MODEL_ID = args.model_path
@@ -135,7 +159,7 @@ def main():
     MODEL = AutoModelForCausalLM.from_pretrained(
         args.model_path,
         trust_remote_code=True,
-        torch_dtype=dtype,
+        dtype=dtype,
         device_map="auto",
     )
     MODEL.eval()
