@@ -37,11 +37,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 def _patch_transformers_compat() -> None:
-    """Shim APIs removed in transformers 5.x still imported by Hub remote code.
-
-    MiniCPM4 and other trust_remote_code models import is_torch_fx_available,
-    which was dropped because torch.fx is always available on supported PyTorch.
-    """
+    """Shim APIs removed/changed in transformers 5.x still used by Hub remote code."""
     import transformers.utils.import_utils as import_utils
 
     if not hasattr(import_utils, "is_torch_fx_available"):
@@ -50,6 +46,41 @@ def _patch_transformers_compat() -> None:
             return True
 
         import_utils.is_torch_fx_available = is_torch_fx_available
+
+    # MiniCPM4 (and other older remote code) still declare
+    # _tied_weights_keys = ["lm_head.weight"] (list). Transformers 5.x expects a dict.
+    from transformers.modeling_utils import PreTrainedModel
+
+    if getattr(PreTrainedModel, "_lumma_server_compat_patched", False):
+        return
+
+    _orig_get_expanded = PreTrainedModel.get_expanded_tied_weights_keys
+
+    def _get_expanded_tied_weights_keys(self, all_submodels=False):
+        tied = self._tied_weights_keys
+        if isinstance(tied, list):
+            embed = self.get_input_embeddings()
+            embed_weight_name = None
+            if embed is not None:
+                for name, param in self.named_parameters():
+                    if param is embed.weight:
+                        embed_weight_name = name
+                        break
+            normalized = (
+                {key: embed_weight_name for key in tied}
+                if embed_weight_name
+                else {}
+            )
+            original = self._tied_weights_keys
+            self._tied_weights_keys = normalized
+            try:
+                return _orig_get_expanded(self, all_submodels)
+            finally:
+                self._tied_weights_keys = original
+        return _orig_get_expanded(self, all_submodels)
+
+    PreTrainedModel.get_expanded_tied_weights_keys = _get_expanded_tied_weights_keys
+    PreTrainedModel._lumma_server_compat_patched = True
 
 
 MODEL = None
